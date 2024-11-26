@@ -1,17 +1,23 @@
 # Using descriptors, compute the taproot address at index 100 derived from this extended public key:
 #   `xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2`
-bitcoin-cli getdescriptorinfo "tr(xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2/0/*)"
+XPUB="xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1
+kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2"
 
-{
-  "descriptor": "tr(xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2/0/*)#5fsaz7dh",
-  "checksum": "5fsaz7dh",
-  "isrange": true,
-  "issolvable": true,
-  "hasprivatekeys": false
-}
+# Remove any whitespace or newlines in the xpub (if copied with line breaks)
+XPUB=$(echo $XPUB | tr -d '\n')
 
-bitcoin-cli deriveaddresses "tr(xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2/0/*)#5fsaz7dh" "[100,100]"
+# Construct the descriptor
+DESCRIPTOR="tr($XPUB/0/*)"
 
-[
-  "bc1p87hwlgyj02e3fqykvkh22t4ekhxe0qn45shwc6vnrhxzr2jtqahsf63f2w"
-]
+# Get the descriptor info and extract the checksum
+CHECKSUM=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR" | jq -r '.checksum')
+
+# Combine the descriptor and checksum
+DESCRIPTOR_WITH_CHECKSUM="${DESCRIPTOR}#${CHECKSUM}"
+
+# Derive the address at index 100
+ADDRESS=$(bitcoin-cli deriveaddresses "$DESCRIPTOR_WITH_CHECKSUM" "[100,100]" | jq -r '.[0]')
+
+# Output the derived address
+echo "The Taproot address at index 100 is:"
+echo "$ADDRESS"
