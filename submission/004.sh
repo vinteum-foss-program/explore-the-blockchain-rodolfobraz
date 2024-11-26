@@ -1,23 +1,18 @@
 # Using descriptors, compute the taproot address at index 100 derived from this extended public key:
 #   `xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2`
-XPUB="xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1
-kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2"
+from embit.descriptor import Descriptor
+from embit.bip32 import HDKey
 
-# Remove any whitespace or newlines in the xpub (if copied with line breaks)
-XPUB=$(echo $XPUB | tr -d '\n')
+# Chave pública estendida fornecida
+xpub = "xpub6Cx5tvq6nACSLJdra1A6WjqTo1SgeUZRFqsX5ysEtVBMwhCCRa4kfgFqaT2o1kwL3esB1PsYr3CUdfRZYfLHJunNWUABKftK2NjHUtzDms2"
 
-# Construct the descriptor
-DESCRIPTOR="tr($XPUB/0/*)"
+# Derivação para o índice 100
+index = 100
 
-# Get the descriptor info and extract the checksum
-CHECKSUM=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR" | jq -r '.checksum')
+# Criar descritor Taproot (tr)
+descriptor = Descriptor.from_string(f"tr({xpub}/{index})")
 
-# Combine the descriptor and checksum
-DESCRIPTOR_WITH_CHECKSUM="${DESCRIPTOR}#${CHECKSUM}"
+# Derivar endereço Taproot
+address = descriptor.derive(index).address()
 
-# Derive the address at index 100
-ADDRESS=$(bitcoin-cli deriveaddresses "$DESCRIPTOR_WITH_CHECKSUM" "[100,100]" | jq -r '.[0]')
-
-# Output the derived address
-echo "The Taproot address at index 100 is:"
-echo "$ADDRESS"
+print("Endereço Taproot no índice 100:", address)
