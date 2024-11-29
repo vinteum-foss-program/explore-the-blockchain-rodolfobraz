@@ -1,29 +1,54 @@
+
 #!/bin/bash
 
-# TxID da transação alvo
+# ID da transação
 TXID="37d966a263350fe747f1c606b159987545844a493dd38d84b070027a895c4517"
 
-# Obter detalhes da transação alvo em formato JSON
-bitcoin-cli getrawtransaction $TXID true > tx.json
+# Passo 1: Obter as chaves públicas das entradas da transação
+echo "Obtendo chaves públicas da transação $TXID..."
+PUBKEYS=$(bitcoin-cli getrawtransaction "$TXID" true | jq -r ".vin[].txinwitness[1]" | paste -sd, -)
 
-# Extrair as chaves públicas dos campos 'txinwitness'
-PUBKEYS=$(jq -r '.vin[].txinwitness[1]' tx.json | paste -sd"," -)
+# Verificar se PUBKEYS foi gerado corretamente
+if [ -z "$PUBKEYS" ]; then
+  echo "Erro: Nenhuma chave pública foi encontrada na transação $TXID."
+  exit 1
+fi
 
-# Criar o descritor multisig 1 de 4 usando as chaves públicas extraídas
+echo "Chaves públicas obtidas: $PUBKEYS"
+
+# Passo 2: Criar o descritor multisig
+echo "Criando o descritor multisig..."
 DESCRIPTOR="sh(multi(1,$PUBKEYS))"
 
-# Obter o checksum do descritor
-DESC_INFO=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR")
-CHECKSUM=$(echo $DESC_INFO | jq -r '.checksum')
+# Passo 3: Validar o descritor com getdescriptorinfo
+echo "Validando o descritor..."
+DESCRIPTOR_INFO=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR")
 
-# Formar o descritor final com o checksum
-DESC_WITH_CHECKSUM="$DESCRIPTOR#$CHECKSUM"
+# Extrair o checksum do descritor
+CHECKSUM=$(echo "$DESCRIPTOR_INFO" | jq -r ".checksum")
 
-# Derivar o endereço P2SH a partir do descritor
-ADDRESS=$(bitcoin-cli deriveaddresses "$DESC_WITH_CHECKSUM")
+if [ -z "$CHECKSUM" ]; then
+  echo "Erro: Não foi possível validar o descritor."
+  exit 1
+fi
 
-# Exibir o endereço resultante
-echo "Endereço multisig 1 de 4 P2SH:"
-echo $ADDRESS
+echo "Descritor validado com sucesso. Checksum: $CHECKSUM"
 
+# Passo 4: Derivar o endereço multisig
+echo "Derivando o endereço multisig..."
+ADDRESS=$(bitcoin-cli deriveaddresses "$DESCRIPTOR")
+
+if [ -z "$ADDRESS" ]; then
+  echo "Erro: Não foi possível derivar o endereço multisig."
+  exit 1
+fi
+
+echo "Endereço multisig derivado com sucesso: $ADDRESS"
+
+# Resultado final
+echo "Resumo:"
+echo " - Transação: $TXID"
+echo " - Chaves públicas: $PUBKEYS"
+echo " - Descritor: $DESCRIPTOR"
+echo " - Endereço multisig: $ADDRESS"
 
