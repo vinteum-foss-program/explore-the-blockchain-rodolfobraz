@@ -1,59 +1,22 @@
-#!/bin/bash
+# Extrair a transação com detalhes completos e dados de witness
+RAW_TX=$(bitcoin-cli getrawtransaction 37d966a263350fe747f1c606b159987545844a493dd38d84b070027a895c4517 true)
 
-# Transaction ID
-txid="37d966a263350fe747f1c606b159987545844a493dd38d84b070027a895c4517"
+# Extrair as chaves públicas dos inputs
+PUBKEY1=$(echo $RAW_TX | jq -r '.vin[0].txinwitness[-1]')
+PUBKEY2=$(echo $RAW_TX | jq -r '.vin[1].txinwitness[-1]')
+PUBKEY3=$(echo $RAW_TX | jq -r '.vin[2].txinwitness[-1]')
+PUBKEY4=$(echo $RAW_TX | jq -r '.vin[3].txinwitness[-1]')
 
-# Get the transaction data
-tx_data=$(bitcoin-cli getrawtransaction "$txid" 1)
+# Criar o descritor multisig com 1 assinatura requerida
+DESCRIPTOR="multi(1,$PUBKEY1,$PUBKEY2,$PUBKEY3,$PUBKEY4)"
 
-# Check if the transaction was retrieved successfully
-if [ -z "$tx_data" ]; then
-  echo "Error: Could not retrieve transaction data."
-  exit 1
-fi
+# Validar o descritor e extrair o descritor compacto
+DESCRIPTOR_INFO=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR")
+DESCRIPTOR_COMPACT=$(echo $DESCRIPTOR_INFO | jq -r '.descriptor')
 
-# Extract the previous transaction IDs and vout indexes from the inputs
-inputs=$(echo "$tx_data" | jq -r '.vin[] | "\(.txid) \(.vout)"')
+# Gerar o endereço multisig a partir do descritor
+ADDRESSES=$(bitcoin-cli deriveaddresses "$DESCRIPTOR_COMPACT")
 
-# Initialize an array for public keys
-pubkeys=()
-
-# Loop through each input to retrieve the public keys
-while read -r prev_txid vout; do
-  # Get the previous transaction data
-  prev_tx_data=$(bitcoin-cli getrawtransaction "$prev_txid" 1)
-  if [ -z "$prev_tx_data" ]; then
-    echo "Error: Could not retrieve previous transaction $prev_txid."
-    exit 1
-  fi
-
-  # Extract the public key from the scriptPubKey in the specified vout
-  pubkey=$(echo "$prev_tx_data" | jq -r ".vout[$vout].scriptPubKey.asm" | awk '{print $2}')
-  
-  # Add the public key to the array
-  if [ -n "$pubkey" ]; then
-    pubkeys+=("$pubkey")
-  fi
-done <<< "$inputs"
-
-# Ensure we have exactly 4 public keys
-if [ "${#pubkeys[@]}" -ne 4 ]; then
-  echo "Error: Did not find exactly 4 public keys."
-  exit 1
-fi
-
-# Create the redeem script for 1-of-4 multisig
-redeem_script="51" # OP_1
-for pubkey in "${pubkeys[@]}"; do
-  redeem_script+="$pubkey"
-done
-redeem_script+="54ae" # OP_4 OP_CHECKMULTISIG
-
-# Hash the redeem script (RIPEMD-160(SHA-256(script)))
-script_hash=$(echo "$redeem_script" | xxd -r -p | openssl dgst -sha256 -binary | openssl dgst -rmd160 -binary | xxd -p -c 80)
-
-# Create the P2SH address
-p2sh_address=$(bitcoin-cli -named createmultisig nrequired=1 keys='["'$script_hash'"]' | jq -r '.address')
-
-# Output the result
-echo "1-of-4 P2SH multisig address: $p2sh_address"
+# Exibir o primeiro endereço derivado
+ADDRESS=$(echo $ADDRESSES | jq -r '.[0]')
+echo $ADDRESS
