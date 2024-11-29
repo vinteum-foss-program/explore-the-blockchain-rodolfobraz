@@ -1,23 +1,29 @@
 #!/bin/bash
 
-# Defina o TXID
+# TxID da transação alvo
 TXID="37d966a263350fe747f1c606b159987545844a493dd38d84b070027a895c4517"
 
-# Obtenha os detalhes da transação e extraia as chaves públicas das entradas
-pubkeys=($(bitcoin-cli getrawtransaction $TXID true | jq -r '.vin[].txinwitness[1]'))
+# Obter detalhes da transação alvo em formato JSON
+bitcoin-cli getrawtransaction $TXID true > tx.json
 
-# Verifique se há exatamente 4 chaves públicas
-[ ${#pubkeys[@]} -ne 4 ] && { echo "Erro: Esperava-se 4 chaves públicas, mas foram encontradas ${#pubkeys[@]}."; exit 1; }
+# Extrair as chaves públicas dos campos 'txinwitness'
+PUBKEYS=$(jq -r '.vin[].txinwitness[1]' tx.json | paste -sd"," -)
 
-# Crie um array JSON com as chaves públicas
-pubkeys_json=$(jq -n --argjson keys "$(printf '%s\n' "${pubkeys[@]}" | jq -R . | jq -s .)" '$keys')
+# Criar o descritor multisig 1 de 4 usando as chaves públicas extraídas
+DESCRIPTOR="sh(multi(1,$PUBKEYS))"
 
-# Crie um endereço multisig P2SH (1-of-4) e extraia o endereço e o Redeem Script
-multisig_info=$(bitcoin-cli createmultisig 1 "$pubkeys_json")
-multisig_address=$(echo $multisig_info | jq -r '.address')
-redeem_script=$(echo $multisig_info | jq -r '.redeemScript')
+# Obter o checksum do descritor
+DESC_INFO=$(bitcoin-cli getdescriptorinfo "$DESCRIPTOR")
+CHECKSUM=$(echo $DESC_INFO | jq -r '.checksum')
 
-# Exiba o resultado
-echo "Endereço Multisig P2SH 1-of-4: $multisig_address"
-echo "Redeem Script: $redeem_script"
+# Formar o descritor final com o checksum
+DESC_WITH_CHECKSUM="$DESCRIPTOR#$CHECKSUM"
+
+# Derivar o endereço P2SH a partir do descritor
+ADDRESS=$(bitcoin-cli deriveaddresses "$DESC_WITH_CHECKSUM")
+
+# Exibir o endereço resultante
+echo "Endereço multisig 1 de 4 P2SH:"
+echo $ADDRESS
+
 
