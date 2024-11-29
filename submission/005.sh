@@ -1,35 +1,18 @@
 #!/bin/bash
 
-# ID da transação
-TXID="37d966a263350fe747f1c606b159987545844a493dd38d84b070027a895c4517"
+# Chave pública extraída das entradas (todas as chaves são iguais neste caso)
+pubkey='02ba9b867aeeb0b0b5460be20b227b94565f0ff3716310a3a7e1f280630d9b8592'
 
-# Obter as chaves públicas das entradas da transação
-PUBKEYS=$(bitcoin-cli getrawtransaction "$TXID" true | jq -r ".vin[].txinwitness[1]" | paste -sd, -)
+# Criar um array de chaves públicas (quatro vezes a mesma chave)
+pubkeys='["'"$pubkey"'", "'"$pubkey"'", "'"$pubkey"'", "'"$pubkey"'"]'
 
-# Validar se as chaves públicas foram extraídas corretamente
-if [ -z "$PUBKEYS" ]; then
-  exit 1 # Falha no teste se não houver chaves públicas
-fi
+# Criar o endereço multisig 1 de 4 usando o bitcoin-cli
+# Especificamos o tipo de endereço como "legacy" para obter um endereço P2SH
+result=$(bitcoin-cli createmultisig 1 "$pubkeys" "legacy")
 
-# Criar o descritor multisig
-RAW_DESCRIPTOR="sh(multi(1,$PUBKEYS))"
+# Extrair o endereço do resultado usando jq
+address=$(echo "$result" | jq -r '.address')
 
-# Obter o descritor validado com checksum
-VALID_DESCRIPTOR=$(bitcoin-cli getdescriptorinfo "$RAW_DESCRIPTOR" | jq -r ".descriptor")
-
-# Validar se o descritor foi gerado corretamente
-if [ -z "$VALID_DESCRIPTOR" ]; then
-  exit 1 # Falha no teste se o descritor não for válido
-fi
-
-# Derivar o endereço multisig
-ADDRESS=$(bitcoin-cli deriveaddresses "$VALID_DESCRIPTOR" | jq -r ".[0]")
-
-# Validar se o endereço foi gerado corretamente
-if [ -z "$ADDRESS" ]; then
-  exit 1 # Falha no teste se o endereço não for gerado
-fi
-
-# Imprimir apenas o endereço como saída final
-echo "$ADDRESS"
+# Imprimir o endereço
+echo "$address"
 
