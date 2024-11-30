@@ -26,14 +26,13 @@ for txid in $txs; do
         fi
 
         # Check if this output is unspent
-        unspent=$(bitcoin-cli listunspent 0 9999999 "[{\"txid\":\"$txid\",\"vout\":$vout}]" | jq '. | length')
+        unspent=$(bitcoin-cli gettxout "$txid" $vout)
 
-        if [[ $unspent -gt 0 ]]; then
-            echo "The unspent output is sent to address: $addresses"
+        if [[ -n "$unspent" ]]; then
+            echo "$addresses"
             exit 0
         fi
     done
 done
 
 echo "No unspent outputs found in block 123,321."
-
