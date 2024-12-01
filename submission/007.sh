@@ -1,38 +1,28 @@
-#!/bin/bash
-
-# Step 1: Get the block hash for block 123,321
+# Passo 1: Obter o hash do bloco
 blockhash=$(bitcoin-cli getblockhash 123321)
 
-# Step 2: Retrieve all transaction IDs from that block
+# Passo 2: Listar todas as transações do bloco
 txs=$(bitcoin-cli getblock "$blockhash" | jq -r '.tx[]')
 
-# Step 3: Iterate through each transaction to find unspent outputs
+# Passo 3: Loop através das transações para encontrar o UTXO
 for txid in $txs; do
-    # Get detailed information about the transaction
+    # Decodificar a transação para extrair os vouts
     raw_tx=$(bitcoin-cli getrawtransaction "$txid")
     decoded_tx=$(bitcoin-cli decoderawtransaction "$raw_tx")
-
-    # Extract outputs
-    outputs=$(echo "$decoded_tx" | jq -c '.vout[]')
-
-    # Iterate through each output
-    for output in $outputs; do
-        vout=$(echo "$output" | jq '.n')
-        addresses=$(echo "$output" | jq -r '.scriptPubKey.addresses[]?')
-
-        # Skip if no address is associated (e.g., OP_RETURN outputs)
-        if [[ -z "$addresses" ]]; then
-            continue
-        fi
-
-        # Check if this output is unspent
-        unspent=$(bitcoin-cli gettxout "$txid" $vout)
-
-        if [[ -n "$unspent" ]]; then
-            echo "$addresses"
+    
+    # Iterar sobre os vouts da transação
+    for index in $(echo "$decoded_tx" | jq -r '.vout[].n'); do
+        # Verificar se o vout foi gasto usando gettxout
+        utxo=$(bitcoin-cli gettxout "$txid" "$index")
+        if [ -n "$utxo" ]; then
+            # Se o gettxout retorna algo, significa que o vout não foi gasto
+            address=$(echo "$utxo" | jq -r '.scriptPubKey.addresses[0]')
+            echo "UTXO encontrado:"
+            echo "Endereço: $address"
+            echo "Valor: $(echo "$utxo" | jq -r '.value') BTC"
             exit 0
         fi
     done
 done
 
-echo "No unspent outputs found in block 123,321."
+echo "Nenhum UTXO não gasto encontrado."
