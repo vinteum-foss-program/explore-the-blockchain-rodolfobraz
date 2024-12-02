@@ -1,66 +1,47 @@
 #!/bin/bash
 
-# Verificar conexão com o bitcoind
-bitcoin-cli getblockchaininfo > /dev/null 2>&1
-if [ $? -ne 0 ]; then
-  echo "Erro: Não foi possível conectar ao servidor bitcoind. Verifique se ele está rodando."
-  exit 1
-fi
+# 007.sh: Find the address of the only unspent output remaining from block 123321.
 
-# Obter o hash do bloco
-blockhash=$(bitcoin-cli getblockhash 123321 2>/dev/null)
-if [ -z "$blockhash" ]; then
-  echo "Erro: Não foi possível obter o hash do bloco."
-  exit 1
-fi
+# -----------------------------------
+# Step 1: Get the blockhash of the provided block
+# -----------------------------------
+BLOCK_HEIGHT=123321
+BLOCK_HASH=$(bitcoin-cli getblockhash $BLOCK_HEIGHT)
 
-# Listar todas as transações do bloco
-txs=$(bitcoin-cli getblock "$blockhash" | jq -r '.tx[]' 2>/dev/null)
-if [ -z "$txs" ]; then
-  echo "Erro: Não foi possível obter as transações do bloco."
-  exit 1
-fi
+# ------------
+# Step 2: List all transactions in the block
+# ------------
+TXIDS=($(bitcoin-cli getblock $BLOCK_HASH | jq -r '.tx[]'))
 
-# Loop através das transações para encontrar o UTXO
-for tx in $txs; do
-    # Decodificar a transação para extrair os vouts
-    raw_tx=$(bitcoin-cli getrawtransaction "$tx" 2>/dev/null)
-    if [ -z "$raw_tx" ]; then
-      continue
-    fi
+# ---------------------------------------------------
+# Step 3: Loop through all transactions to find the unspent output
+# ---------------------------------------------------
 
-    decoded_tx=$(bitcoin-cli decoderawtransaction "$raw_tx" 2>/dev/null)
-    if [ -z "$decoded_tx" ]; then
-      continue
-    fi
+for TXID in "${TXIDS[@]}"; do
+    # Decode the transaction
+    RAW_TX=$(bitcoin-cli getrawtransaction $TXID)
+    DECODED_TX=$(bitcoin-cli decoderawtransaction $RAW_TX)
 
-    vouts=$(echo "$decoded_tx" | jq -c ".vout[]" 2>/dev/null)
-    if [ -z "$vouts" ]; then
-      continue
-    fi
+    # Get all vout indices
+    VOUTS=$(echo $DECODED_TX | jq -c '.vout[]')
 
-    # Loop pelos vouts para verificar se foram gastos
-    for vout in $vouts; do
-        vout_index=$(echo "$vout" | jq -c ".n" 2>/dev/null)
-        if [ -z "$vout_index" ]; then
-          continue
-        fi
+    # Loop through each vout
+    for VOUT in $VOUTS; do
+        VOUT_INDEX=$(echo $VOUT | jq -r '.n')
 
-        spent=$(bitcoin-cli -datadir=$HOME/.bitcoin gettxout "$tx" "$vout_index" 2>/dev/null)
-        if [[ "$spent" != "" ]]; then
-            address=$(echo "$spent" | jq -r ".scriptPubKey.address" 2>/dev/null)
-            if [ -n "$address" ]; then
-              # Saída apenas o endereço e encerra
-              echo "$address"
-              exit 0
-            fi
+        # Check if the vout is unspent
+        UTXO=$(bitcoin-cli gettxout $TXID $VOUT_INDEX)
+        if [ -n "$UTXO" ]; then
+            # Extract value and address from the unspent vout
+            VALUE=$(echo $VOUT | jq -r '.value')
+            ADDRESS=$(echo $VOUT | jq -r '.scriptPubKey.addresses[0]')
+
+            echo "Unspent Output Found:"
+            echo "Address: $ADDRESS"
+            echo "Value: $VALUE BTC"
+            exit 0
         fi
     done
 done
 
-# Caso nenhum UTXO seja encontrado
-exit 1
-
-
-
-
+echo "No unspent outputs found in block $BLOCK_HEIGHT."
