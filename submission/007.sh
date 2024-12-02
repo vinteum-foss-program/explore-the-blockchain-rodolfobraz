@@ -7,18 +7,20 @@ blockhash=$(bitcoin-cli getblockhash 123321)
 txs=$(bitcoin-cli getblock "$blockhash" | jq -r '.tx[]')
 
 # Loop através das transações para encontrar o UTXO
-for txid in $txs; do
+for tx in $txs; do
     # Decodificar a transação para extrair os vouts
-    raw_tx=$(bitcoin-cli getrawtransaction "$txid")
+    raw_tx=$(bitcoin-cli getrawtransaction "$tx")
     decoded_tx=$(bitcoin-cli decoderawtransaction "$raw_tx")
-    
-    for index in $(echo "$decoded_tx" | jq -r '.vout[].n'); do
-        # Verificar se o vout foi gasto usando gettxout
-        utxo=$(bitcoin-cli gettxout "$txid" "$index")
-        if [ -n "$utxo" ]; then
-            # Se o gettxout retorna algo, significa que o vout não foi gasto
-            address=$(echo "$utxo" | jq -r '.scriptPubKey.addresses[0]')
-            echo "$address"
+    vouts=$(echo "$decoded_tx" | jq -c ".vout[]")
+
+    # Loop pelos vouts para verificar se foram gastos
+    for vout in $vouts; do
+        # Extrair o índice e verificar se o vout foi gasto
+        vout_index=$(echo "$vout" | jq -c ".n")
+        spent=$(bitcoin-cli -datadir=$HOME/.bitcoin gettxout "$tx" "$vout_index" 2>/dev/null)
+        if [[ "$spent" != "" ]]; then
+            # Imprimir o endereço e sair
+            echo "$spent" | jq -r ".scriptPubKey.address"
             exit 0
         fi
     done
@@ -26,3 +28,4 @@ done
 
 # Caso nenhum UTXO seja encontrado
 exit 1
+
