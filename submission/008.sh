@@ -1,46 +1,25 @@
 # Which public key signed input 0 in this tx:
 #   `e5969add849689854ac7f28e45628b89f7454b83e9699e551ce14b6f90c86163`
  
-#!/bin/bash
+TXID=e5969add849689854ac7f28e45628b89f7454b83e9699e551ce14b6f90c86163
 
-# Define the transaction ID of the spending transaction
-txid="e5969add849689854ac7f28e45628b89f7454b83e9699e551ce14b6f90c86163"
+TRANSACTION=$(bitcoin-cli getrawtransaction $TXID 1)
 
-# Decode the spending transaction
-decoded_tx=$(bitcoin-cli getrawtransaction "$txid" true)
+IF_CONDITION=$(echo $TRANSACTION | jq -r '.vin[0].txinwitness[1]')
+# 01
 
-# Extract the previous transaction ID and vout index from the first input
-prev_txid=$(echo "$decoded_tx" | jq -r '.vin[0].txid')
-prev_vout=$(echo "$decoded_tx" | jq -r '.vin[0].vout')
+WITNESS_SCRIPT=$(echo $TRANSACTION | jq '.vin[0].txinwitness[2]')
+# "6321025d524ac7ec6501d018d322334f142c7c11aa24b9cffec03161eca35a1e32a71f67029000b2752102ad92d02b7061f520ebb60e932f9743a43fee1db87d2feb1398bf037b3f119fc268ac"
 
-echo "Previous transaction ID: $prev_txid"
-echo "Vout being spent: $prev_vout"
+PUBKEY_1=$(echo $WITNESS_SCRIPT | jq -r '.[4:70]')
+# 025d524ac7ec6501d018d322334f142c7c11aa24b9cffec03161eca35a1e32a71f
 
-# Decode the previous transaction
-prev_tx=$(bitcoin-cli getrawtransaction "$prev_txid" true)
+PUBKEY_0=$(echo $WITNESS_SCRIPT | jq -r '.[84:150]')
+# 02ad92d02b7061f520ebb60e932f9743a43fee1db87d2feb1398bf037b3f119fc2
 
-# Extract the scriptPubKey (asm) from the previous transaction
-scriptPubKey_asm=$(echo "$prev_tx" | jq -r ".vout[$prev_vout].scriptPubKey.asm")
-echo "scriptPubKey (previous transaction): $scriptPubKey_asm"
-
-# Extract the scriptSig (asm) from the current transaction
-scriptSig_asm=$(echo "$decoded_tx" | jq -r '.vin[0].scriptSig.asm')
-echo "scriptSig (current transaction): $scriptSig_asm"
-
-# Analyze the witness or scriptSig to find the redeem script (if present) and public key
-redeem_script=$(echo "$scriptSig_asm" | awk '{print $NF}') # Last item in the scriptSig is usually the redeem script
-pubkey=$(echo "$scriptSig_asm" | awk '{print $(NF-1)}')    # Second-to-last item in the scriptSig is usually the public key
-
-echo "Redeem Script: $redeem_script"
-echo "Public Key: $pubkey"
-
-# Verify the hash of the redeem script matches the hash in the scriptPubKey
-redeem_hash=$(echo -n "$redeem_script" | xxd -r -p | sha256sum | awk '{print $1}')
-scriptPubKey_hash=$(echo "$scriptPubKey_asm" | awk '{print $NF}')
-
-if [[ "$redeem_hash" == "$scriptPubKey_hash" ]]; then
-    echo "Redeem script hash matches the scriptPubKey hash!"
+if [ $IF_CONDITION -ge 1 ]; then
+  echo $PUBKEY_1
+  # 025d524ac7ec6501d018d322334f142c7c11aa24b9cffec03161eca35a1e32a71f
 else
-    echo "Redeem script hash does NOT match the scriptPubKey hash!"
+  echo $PUBKEY_0
 fi
-
