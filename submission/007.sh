@@ -19,14 +19,11 @@ for txid in $txs; do
         if [ -n "$utxo" ]; then
             # Se o gettxout retorna algo, significa que o vout não foi gasto
             address=$(echo "$utxo" | jq -r '.scriptPubKey.addresses[0]')
-            echo "UTXO encontrado:"
-            echo "Endereço: $address"
-            echo "Valor: $(echo "$utxo" | jq -r '.value') BTC"
+            echo "$address"
             exit 0
         fi
     done
 done
 
-echo "Nenhum UTXO não gasto encontrado."
 
 
