@@ -1,6 +1,5 @@
 blockhash=$(bitcoin-cli getblockhash 123321)
-blockdata=$(bitcoin-cli getblock "$blockhash" 1)
-txids=$(echo "$blockdata" | jq -r '.tx[]')
+txids=$(bitcoin-cli getblock "$blockhash" | jq -r '.tx[]')
 
 for txid in $txids; do
     txdata=$(bitcoin-cli getrawtransaction "$txid" 1)
@@ -8,8 +7,12 @@ for txid in $txids; do
     for (( vout=0; vout<num_vout; vout++ )); do
         txout=$(bitcoin-cli gettxout "$txid" $vout)
         if [ "$txout" != "null" ]; then
-            address=$(echo "$txdata" | jq -r ".vout[$vout].scriptPubKey.addresses[0]")
-            echo "O output não gasto está na transação $txid, vout $vout, enviado para o endereço $address"
+            scriptPubKeyHex=$(echo "$txout" | jq -r '.scriptPubKey.hex')
+            decodedScript=$(bitcoin-cli decodescript "$scriptPubKeyHex")
+            address=$(echo "$decodedScript" | jq -r '.addresses[0] // .address')
+            if [ "$address" != "null" ]; then
+                echo "$address"
+            fi
         fi
     done
 done
