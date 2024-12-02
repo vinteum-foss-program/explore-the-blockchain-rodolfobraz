@@ -1,47 +1,40 @@
 #!/bin/bash
 
-# 007.sh: Find the address of the only unspent output remaining from block 123321.
+# Obtém o hash do bloco 123321
+block_hash=$(bitcoin-cli getblockhash 123321)
 
-# -----------------------------------
-# Step 1: Get the blockhash of the provided block
-# -----------------------------------
-BLOCK_HEIGHT=123321
-BLOCK_HASH=$(bitcoin-cli getblockhash $BLOCK_HEIGHT)
+# Obtém os dados completos do bloco com detalhes das transações
+block_data=$(bitcoin-cli getblock "$block_hash" 2)
 
-# ------------
-# Step 2: List all transactions in the block
-# ------------
-TXIDS=($(bitcoin-cli getblock $BLOCK_HASH | jq -r '.tx[]'))
+# Extrai as transações do bloco
+txs=$(echo "$block_data" | jq -r '.tx[] | @base64')
 
-# ---------------------------------------------------
-# Step 3: Loop through all transactions to find the unspent output
-# ---------------------------------------------------
+# Percorre cada transação
+for tx in $txs; do
+    # Decodifica os dados da transação
+    tx_data=$(echo "$tx" | base64 --decode)
 
-for TXID in "${TXIDS[@]}"; do
-    # Decode the transaction
-    RAW_TX=$(bitcoin-cli getrawtransaction $TXID)
-    DECODED_TX=$(bitcoin-cli decoderawtransaction $RAW_TX)
+    # Obtém o ID da transação
+    txid=$(echo "$tx_data" | jq -r '.txid')
 
-    # Get all vout indices
-    VOUTS=$(echo $DECODED_TX | jq -c '.vout[]')
+    # Percorre cada saída (vout) da transação
+    vouts=$(echo "$tx_data" | jq -c '.vout[]')
+    for vout in $vouts; do
+        # Obtém o índice da saída
+        n=$(echo "$vout" | jq '.n')
 
-    # Loop through each vout
-    for VOUT in $VOUTS; do
-        VOUT_INDEX=$(echo $VOUT | jq -r '.n')
+        # Verifica se a saída ainda não foi gasta
+        utxo=$(bitcoin-cli gettxout "$txid" $n)
+        if [ -n "$utxo" ]; then
+            # Obtém o(s) endereço(s) associado(s) à saída
+            addresses=$(echo "$vout" | jq -r '.scriptPubKey.addresses[]?')
 
-        # Check if the vout is unspent
-        UTXO=$(bitcoin-cli gettxout $TXID $VOUT_INDEX)
-        if [ -n "$UTXO" ]; then
-            # Extract value and address from the unspent vout
-            VALUE=$(echo $VOUT | jq -r '.value')
-            ADDRESS=$(echo $VOUT | jq -r '.scriptPubKey.addresses[0]')
-
-            echo "Unspent Output Found:"
-            echo "Address: $ADDRESS"
-            echo "Value: $VALUE BTC"
-            exit 0
+            # Exibe as informações da saída não gasta
+            echo "Saída não gasta encontrada:"
+            echo "TXID: $txid"
+            echo "VOUT: $n"
+            echo "Endereço(s): $addresses"
+            echo "-----------------------------"
         fi
     done
 done
-
-echo "No unspent outputs found in block $BLOCK_HEIGHT."
