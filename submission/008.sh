@@ -1,12 +1,16 @@
 # Which public key signed input 0 in this tx:
 #   `e5969add849689854ac7f28e45628b89f7454b83e9699e551ce14b6f90c86163`
  
+#!/bin/bash
 
 # ID da transação
 txid='e5969add849689854ac7f28e45628b89f7454b83e9699e551ce14b6f90c86163'
 
-# Recupera e decodifica a transação
-tx=$(bitcoin-cli getrawtransaction $txid true)
+# Hash do bloco onde a transação está incluída
+blockhash='0000000000000000000d1e8b63ec5225a12e20621e8d2fb3c44b144e6c160016'  # Substitua pelo hash correto do bloco
+
+# Recupera e decodifica a transação, fornecendo o hash do bloco
+tx=$(bitcoin-cli getrawtransaction $txid true $blockhash)
 
 # Verifica se 'txinwitness' existe na entrada 0
 witness=$(echo "$tx" | jq '.vin[0].txinwitness')
